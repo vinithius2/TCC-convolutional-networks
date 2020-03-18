@@ -1,13 +1,8 @@
-# TensorFlow and tf.keras
-import tensorflow as tf
-from tensorflow import keras
 import cv2
 import os
-from tensorflow.keras.preprocessing.image import img_to_array
-# Helper libraries
-import numpy as np
+import csv
 import zipfile
-import matplotlib.pyplot as plt
+
 cascade_faces = '../material/haarcascade_frontalface_default.xml'
 face_detection = cv2.CascadeClassifier(cascade_faces)
 
@@ -17,9 +12,22 @@ zip_object.extractall("../material")
 
 male_list = os.listdir('../material/male/')
 female_list = os.listdir('../material/female/')
-
 category = {'male': male_list, 'female': female_list}
-
+to_list = [['index', 'category', 'pixels']]
+category_cvs = {
+    'young_male': 0,
+    'adult_male': 1,
+    'old_male': 2,
+    'young_female': 3,
+    'adult_female': 4,
+    'old_female': 5,
+}
+index = 0
+"""
+    Pega-se todas as imagens comuns com RGB e alta resolução e transforma em imagens de tonalização cinza por 48 pixels
+    de altura e largura. 
+    
+"""
 for key, list in category.items():
     for name in list:
         files = os.listdir(f'../material/{key}/{name}')
@@ -42,3 +50,15 @@ for key, list in category.items():
                     os.makedirs(f'material/image_grey/{key}/{name}')
                     print(f'Create directory: material/image_grey/{key}/{name}')
                 cv2.imwrite(f'material/image_grey/{key}/{name}/{file}.jpg', roi)
+
+                all_pixels = str()
+                all_array_pixels = []
+                for pixels in roi:
+                    all_array_pixels.append(" ".join(str(x) for x in pixels))
+                all_pixels = " ".join(str(x) for x in all_array_pixels)
+                index += 1
+                to_list.append([index, category_cvs[f'{name}_{key}'], all_pixels])
+
+with open('human_category.csv', 'w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerows(to_list)
