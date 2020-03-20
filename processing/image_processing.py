@@ -1,19 +1,16 @@
 import cv2
 import os
 import csv
-import zipfile
 
 cascade_faces = '../material/haarcascade_frontalface_default.xml'
 face_detection = cv2.CascadeClassifier(cascade_faces)
 
-path = "../material/faces.zip"
-zip_object = zipfile.ZipFile(file=path, mode="r")
-zip_object.extractall("../material")
-
 male_list = os.listdir('../material/male/')
 female_list = os.listdir('../material/female/')
+
 category = {'male': male_list, 'female': female_list}
 to_list = [['index', 'category', 'pixels']]
+
 category_cvs = {
     'young_male': 0,
     'adult_male': 1,
@@ -46,10 +43,10 @@ for key, list in category.items():
                 roi = grey[y:y + boxe_y, x:x + boxe_x]
                 roi = cv2.resize(roi, (48, 48))
 
-                if not os.path.exists(f'material/image_grey/{key}/{name}'):
-                    os.makedirs(f'material/image_grey/{key}/{name}')
+                if not os.path.exists(f'../material/image_grey/{key}/{name}'):
+                    os.makedirs(f'../material/image_grey/{key}/{name}')
                     print(f'Create directory: material/image_grey/{key}/{name}')
-                cv2.imwrite(f'material/image_grey/{key}/{name}/{file}.jpg', roi)
+                cv2.imwrite(f'../material/image_grey/{key}/{name}/{file}.jpg', roi)
 
                 all_pixels = str()
                 all_array_pixels = []
@@ -59,6 +56,6 @@ for key, list in category.items():
                 index += 1
                 to_list.append([index, category_cvs[f'{name}_{key}'], all_pixels])
 
-with open('human_category.csv', 'w', newline='') as file:
+with open('../material/human_category.csv', 'w', newline='') as file:
     writer = csv.writer(file)
     writer.writerows(to_list)
