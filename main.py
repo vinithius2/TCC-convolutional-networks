@@ -1,29 +1,16 @@
 import getopt
 import sys
-import zipfile
 import cv2
-import csv
 import os
-import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import itertools
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, BatchNormalization
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
-from tensorflow.keras.models import model_from_json
 
 
 def main(argv):
     """
-    Função principal que executa todos passos por linha de comando, desde a criação do dataset aos teste de
-    detectação facial em vídeo ou imagem.
-    :param argv: list()
+        Função principal que executa todos passos por linha de comando, desde a criação do dataset aos teste de
+        detectação facial em vídeo ou imagem.
+        :param argv: list()
     """
     try:
         opts, args = getopt.getopt(argv, "i:v:dth", ["image=", "video=", "dataset", "training", "help"])
@@ -40,8 +27,10 @@ def main(argv):
             print('# -t')
             # training()
         elif opt in ("-i", "--image"):
-            print('# -i')
-            # detect_face_in_image()
+            if not os.path.exists(arg):
+                print('Caminho desconhecido, tente novamente.')
+            else:
+                detect_face_in_image(arg)
         elif opt in ("-v", "--video"):
             print('# -v')
             # detect_face_in_video()
@@ -54,7 +43,11 @@ def main(argv):
 
 
 def help():
-    print('# Descompacta as imagens e cria o dataset para rede neural.')
+    """
+        Dicas de comandos para o terminal
+        :return:
+    """
+    print('\n# Descompacta as imagens e cria o dataset para rede neural.')
     print('main.py -d --dataset\n')
     print('# Treina e testar a rede neural, gerando gráficos para o entendimento do treinamento.')
     print('main.py -t --training\n')
@@ -66,7 +59,7 @@ def help():
 
 def create_dataset():
     """
-    Descompactar imagens e criar dataset para rede neural.
+        Descompactar imagens e criar dataset para rede neural.
     """
     extrat_zip()
     image_processing()
@@ -74,7 +67,7 @@ def create_dataset():
 
 def training():
     """
-    Treinar e testar a rede neural, gerar gráficos para o entendimento do treinamento.
+        Treinar e testar a rede neural, gerar gráficos para o entendimento do treinamento.
     """
     X_train, y_train, X_val, y_val, X_test, y_test = test_base_validation()
     faces, category = convert_images_for_tensorflow()
@@ -89,27 +82,74 @@ def training():
 
 def detect_face_in_image(path):
     """
-    Detecção facial por imagem
-    :return:
+        Detecção facial por imagem.
+        :return:
     """
-    pass
+    import cv2
+    import numpy as np
+    from PIL import Image
+    from tensorflow.keras.models import model_from_json
+
+    category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
+
+    imagem = cv2.imread(path)
+
+    name_file = path.split('/')
+    name_file = name_file[-1:][0]
+    name_file = name_file.split('.')
+    name_file = name_file[0]
+
+    arquivo_modelo = 'processing/model_01_human_category.h5'
+    arquivo_modelo_json = 'processing/model_01_human_category.json'
+
+    json_file = open(arquivo_modelo_json, 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+
+    loaded_model = model_from_json(loaded_model_json)
+    loaded_model.load_weights(arquivo_modelo)
+
+    original = imagem.copy()
+    gray = cv2.cvtColor(original, cv2.COLOR_BGR2GRAY)
+
+    face_cascade = cv2.CascadeClassifier('material/haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, 1.1, 3)
+
+    for (x, y, w, h) in faces:
+        cv2.rectangle(original, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        roi_gray = gray[y:y + h, x:x + w]
+        roi_gray = roi_gray.astype('float') / 255.0
+        cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0)
+        prediction = loaded_model.predict(cropped_img)[0]
+        cv2.putText(original, category[int(np.argmax(prediction))], (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+
+    if not os.path.exists('material/test_images'):
+        os.makedirs('material/test_images')
+        print(f'Create directory: material/test_images')
+    cv2.imwrite(f'material/test_images/{name_file}.png', original)
+    # cv2.imshow('ImageWindow', original)
+    # cv2.waitKey()
 
 
 def detect_face_in_video(path):
     """
-    Detecção facial por vídeo
-    :return:
+        Detecção facial por vídeo
+        :return:
     """
     pass
 
 
 def test_base_validation(faces, category):
     """
-    Base de treinamento, teste e validação
-    :param faces:
-    :param category:
-    :return:
+        Base de treinamento, teste e validação
+        :param faces:
+        :param category:
+        :return:
     """
+    from sklearn.model_selection import train_test_split
+    import numpy as np
+
     # Base treinamento
     X_train, X_test, y_train, y_test = train_test_split(faces, category, test_size=0.1, random_state=42)
     # Base de validação
@@ -124,9 +164,12 @@ def test_base_validation(faces, category):
 
 def convert_images_for_tensorflow():
     """
-    Converter as imagens cinzas no formato que o TensorFlow reconheça.
-    :return:
+        Converter as imagens cinzas no formato que o TensorFlow reconheça.
+        :return:
     """
+    import numpy as np
+    import pandas as pd
+
     data = pd.read_csv('material/category_human.csv')
     print(data.tail())
 
@@ -152,9 +195,14 @@ def convert_images_for_tensorflow():
 
 def create_neural_network():
     """
-    Criação das Redes Neurais
-    :return:
+        Criação das Redes Neurais
+        :return:
     """
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Dense, Dropout, Flatten
+    from tensorflow.keras.layers import Conv2D, MaxPooling2D, BatchNormalization
+    from tensorflow.keras.regularizers import l2
+
     num_features = 64
     num_labels = 6
     width, height = 48, 48
@@ -206,10 +254,13 @@ def create_neural_network():
 
 def model_compile(model):
     """
-    Copilando modelo
-    :param model:
-    :return:
+        Copilando modelo
+        :param model:
+        :return:
     """
+    from tensorflow.keras.optimizers import Adam
+    from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
+
     model.compile(loss='categorical_crossentropy',
                   optimizer=Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-7),
                   metrics=['accuracy'])
@@ -224,9 +275,9 @@ def model_compile(model):
 
 def save_json(model):
     """
-    Salvando a arquitetura do modelo em um arquivo JSON
-    :param model:
-    :return:
+        Salvando a arquitetura do modelo em um arquivo JSON
+        :param model:
+        :return:
     """
     arquivo_modelo_json = 'model_01_human_category.json'
     model_json = model.to_json()
@@ -236,17 +287,19 @@ def save_json(model):
 
 def model_training(model, X_train, y_train, X_val, y_val, lr_reducer, early_stopper, checkpointer):
     """
-    Treinando o modelo
-    :param model:
-    :param X_train:
-    :param y_train:
-    :param X_val:
-    :param y_val:
-    :param lr_reducer:
-    :param early_stopper:
-    :param checkpointer:
-    :return:
+        Treinando o modelo
+        :param model:
+        :param X_train:
+        :param y_train:
+        :param X_val:
+        :param y_val:
+        :param lr_reducer:
+        :param early_stopper:
+        :param checkpointer:
+        :return:
     """
+    import numpy as np
+
     batch_size = 64
     epochs = 100
     history = model.fit(np.array(X_train), np.array(y_train),
@@ -261,10 +314,11 @@ def model_training(model, X_train, y_train, X_val, y_val, lr_reducer, early_stop
 
 def create_graph_accuracy(history):
     """
-    Gerando os gráficos
-    :param history:
-    :return:
+        Gerando os gráficos
+        :param history:
+        :return:
     """
+
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
     axs[0].plot(range(1, len(history.history['accuracy']) + 1), history.history['accuracy'], 'r')
     axs[0].plot(range(1, len(history.history['val_accuracy']) + 1), history.history['val_accuracy'], 'b')
@@ -288,9 +342,11 @@ def create_graph_accuracy(history):
 
 def data_to_generate_the_confusion_matrix():
     """
-    Gerando os dados para a geração da matriz de confusão
-    :return:
+        Gerando os dados para a geração da matriz de confusão
+        :return:
     """
+    from tensorflow.keras.models import model_from_json
+
     true_y = []
     pred_y = []
     arquivo_modelo_json = 'model_01_human_category.json'
@@ -321,11 +377,11 @@ def data_to_generate_the_confusion_matrix():
 
 def checking_model_accuracy(model, X_test, y_test):
     """
-    Conferindo a acurácia do modelo
-    :param model:
-    :param X_test:
-    :param y_test:
-    :return:
+        Conferindo a acurácia do modelo
+        :param model:
+        :param X_test:
+        :param y_test:
+        :return:
     """
     batch_size = 64
     scores = model.evaluate(np.array(X_test), np.array(y_test), batch_size=batch_size)
@@ -336,9 +392,12 @@ def checking_model_accuracy(model, X_test, y_test):
 
 def generate_the_confusion_matrix():
     """
-    Gerando a Matriz de Confusão
-    :return:
+        Gerando a Matriz de Confusão
+        :return:
     """
+    from sklearn.metrics import confusion_matrix
+    import itertools
+
     y_true = np.load('material/truey_mod01.npy')
     y_pred = np.load('material/predy_mod01.npy')
     cm = confusion_matrix(y_true, y_pred)
@@ -365,20 +424,24 @@ def generate_the_confusion_matrix():
 
 def extrat_zip():
     """
-    Extração das imagens base
-    :return:
+        Extração das imagens base
+        :return:
     """
-    path = "material/faces.zip"
+    import zipfile
+
+    path = "material/image_grey.zip"
     zip_object = zipfile.ZipFile(file=path, mode="r")
     zip_object.extractall("material")
 
 
 def image_processing():
     """
-    Pega-se todas as imagens comuns com RGB e alta resolução e transforma em imagens de tonalização cinza por 48 pixels
-    de altura e largura.
-    :return:
+        Pega-se todas as imagens comuns com RGB e alta resolução e transforma em imagens de tonalização cinza por 48 pixels
+        de altura e largura.
+        :return:
     """
+    import csv
+
     cascade_faces = 'material/haarcascade_frontalface_default.xml'
     face_detection = cv2.CascadeClassifier(cascade_faces)
     male_list = os.listdir('material/male/')
