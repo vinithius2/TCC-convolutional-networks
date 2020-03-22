@@ -14,26 +14,25 @@ def main(argv):
     """
     try:
         opts, args = getopt.getopt(argv, "i:v:dth", ["image=", "video=", "dataset", "training", "help"])
-        print(opts, args, argv)
     except getopt.GetoptError as e:
         print("Erro: ", e, "\n")
         help()
         sys.exit(2)
     for opt, arg in opts:
         if opt in ("-d", "--dataset"):
-            print('# -d')
-            # create_dataset()
+            create_dataset()
         elif opt in ("-t", "--training"):
-            print('# -t')
-            # training()
+            training()
         elif opt in ("-i", "--image"):
             if not os.path.exists(arg):
                 print('Caminho desconhecido, tente novamente.')
             else:
                 detect_face_in_image(arg)
         elif opt in ("-v", "--video"):
-            print('# -v')
-            # detect_face_in_video()
+            if not os.path.exists(arg):
+                print('Caminho desconhecido, tente novamente.')
+            else:
+                detect_face_in_video(arg)
         elif opt in ("-h", "--help"):
             help()
         else:
@@ -85,9 +84,7 @@ def detect_face_in_image(path):
         Detecção facial por imagem.
         :return:
     """
-    import cv2
     import numpy as np
-    from PIL import Image
     from tensorflow.keras.models import model_from_json
 
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
@@ -128,8 +125,6 @@ def detect_face_in_image(path):
         os.makedirs('material/test_images')
         print(f'Create directory: material/test_images')
     cv2.imwrite(f'material/test_images/{name_file}.png', original)
-    # cv2.imshow('ImageWindow', original)
-    # cv2.waitKey()
 
 
 def detect_face_in_video(path):
@@ -137,7 +132,79 @@ def detect_face_in_video(path):
         Detecção facial por vídeo
         :return:
     """
-    pass
+    import numpy as np
+    import time
+    from tensorflow.keras.preprocessing.image import img_to_array
+    from tensorflow.keras.models import load_model
+
+    arquivo_modelo = 'processing/model_01_human_category.h5'
+    model = load_model(arquivo_modelo)
+
+    cap = cv2.VideoCapture(path)
+
+    name_file = path.split('/')
+    name_file = name_file[-1:][0]
+    name_file = name_file.split('.')
+    name_file = name_file[0]
+
+    conectado, video = cap.read()
+
+    redimensionar = True
+    largura_maxima = 600
+
+    if redimensionar and video.shape[1] > largura_maxima:
+        proporcao = video.shape[1] / video.shape[0]
+        video_largura = largura_maxima
+        video_altura = int(video_largura / proporcao)
+    else:
+        video_largura = video.shape[1]
+        video_altura = video.shape[0]
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fps = 24
+    if not os.path.exists('material/test_videos'):
+        os.makedirs('material/test_videos')
+        print(f'Create directory: material/test_videos')
+    saida_video = cv2.VideoWriter(f'material/test_videos/{name_file}.mp4', fourcc, fps, (video_largura, video_altura))
+
+    fonte_pequena, fonte_media = 0.4, 0.7
+    fonte = cv2.FONT_HERSHEY_SIMPLEX
+    category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
+
+    while cv2.waitKey(1) < 0:
+        conectado, frame = cap.read()
+        if not conectado:
+            break
+        t = time.time()
+        if redimensionar:
+            frame = cv2.resize(frame, (video_largura, video_altura))
+        face_cascade = cv2.CascadeClassifier('material/haarcascade_frontalface_default.xml')
+        cinza = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+
+        if len(faces) > 0:
+            for (x, y, w, h) in faces:
+                frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
+                roi = cinza[y:y + h, x:x + w]
+                roi = cv2.resize(roi, (48, 48))
+                roi = roi.astype("float") / 255.0
+                roi = img_to_array(roi)
+                roi = np.expand_dims(roi, axis=0)
+                result = model.predict(roi)[0]
+                print(result)
+                if result is not None:
+                    resultado = np.argmax(result)
+                    cv2.putText(frame, category[resultado], (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
+                                cv2.LINE_AA)
+
+        cv2.putText(frame, " frame processado em {:.2f} segundos".format(time.time() - t), (20, video_altura - 20),
+                    fonte,
+                    fonte_pequena, (250, 250, 250), 0, lineType=cv2.LINE_AA)
+
+        saida_video.write(frame)
+
+    print("Terminou")
+    saida_video.release()
 
 
 def test_base_validation(faces, category):
@@ -436,8 +503,8 @@ def extrat_zip():
 
 def image_processing():
     """
-        Pega-se todas as imagens comuns com RGB e alta resolução e transforma em imagens de tonalização cinza por 48 pixels
-        de altura e largura.
+        Pega-se todas as imagens comuns com RGB e alta resolução e transforma em imagens de tonalização cinza por
+        48 pixels de altura e largura.
         :return:
     """
     import csv
