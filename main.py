@@ -13,7 +13,7 @@ def main(argv):
         :param argv: list()
     """
     try:
-        opts, args = getopt.getopt(argv, "i:v:dth", ["image=", "video=", "dataset", "training", "help"])
+        opts, args = getopt.getopt(argv, "i:v:dtrh", ["image=", "video=", "dataset", "training", "real", "help"])
     except getopt.GetoptError as e:
         print("Erro: ", e, "\n")
         help()
@@ -33,6 +33,9 @@ def main(argv):
                 print('Caminho desconhecido, tente novamente.')
             else:
                 detect_face_in_video(arg)
+        elif opt in ("-r", "--real"):
+            print('# REAL')
+            detect_face_in_realtime()
         elif opt in ("-h", "--help"):
             help()
         else:
@@ -54,6 +57,8 @@ def help():
     print('main.py -i <path> --image <path>\n')
     print('# Inicia a dectação no vídeo passado pelo PATH')
     print('main.py -v <path> --video <path>\n')
+    print('# Inicia a dectação em tempo real pela webcam')
+    print('main.py -r <path> --real <path>\n')
 
 
 def create_dataset():
@@ -205,6 +210,85 @@ def detect_face_in_video(path):
 
     print("Terminou")
     saida_video.release()
+
+
+def detect_face_in_realtime():
+    """
+        Detecção facial em tempo real pela webcam
+        :return:
+    """
+    import time
+    import matlab.engine
+    from tensorflow.keras.preprocessing.image import img_to_array
+    from tensorflow.keras.models import load_model
+
+    arquivo_modelo = 'processing/model_01_human_category.h5'
+    model = load_model(arquivo_modelo)
+
+    cap = cv2.VideoCapture(0)
+
+    conectado, video = cap.read()
+
+    redimensionar = True
+    largura_maxima = 600
+
+    if redimensionar and video.shape[1] > largura_maxima:
+        proporcao = video.shape[1] / video.shape[0]
+        video_largura = largura_maxima
+        video_altura = int(video_largura / proporcao)
+    else:
+        video_largura = video.shape[1]
+        video_altura = video.shape[0]
+
+    fonte_pequena, fonte_media = 0.4, 0.7
+    fonte = cv2.FONT_HERSHEY_SIMPLEX
+    category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
+
+    while cv2.waitKey(1) < 0:
+        conectado, frame = cap.read()
+        if not conectado:
+            break
+        t = time.time()
+        if redimensionar:
+            frame = cv2.resize(frame, (video_largura, video_altura))
+        face_cascade = cv2.CascadeClassifier('material/haarcascade_frontalface_default.xml')
+        cinza = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+
+        if len(faces) > 0:
+            for (x, y, w, h) in faces:
+                frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
+                roi = cinza[y:y + h, x:x + w]
+                roi = cv2.resize(roi, (48, 48))
+                roi = roi.astype("float") / 255.0
+                roi = img_to_array(roi)
+                roi = np.expand_dims(roi, axis=0)
+                result = model.predict(roi)[0]
+                print(result)
+                if result is not None:
+                    # image_01 = cv2.imread('material/01_realtime.png')
+                    # if image_01:
+                    #     image_02 = cv2.imread(frame)
+                    #     I = np.single(rgb2gray(I))
+                    #     J = single(rgb2gray(J))
+                    # cv2.imwrite('material/01_realtime.png', frame)
+                    resultado = np.argmax(result)
+                    cv2.putText(frame, category[resultado], (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
+                                cv2.LINE_AA)
+
+        cv2.putText(frame,
+                    " frame processado em {:.2f} segundos".format(time.time() - t),
+                    (20, video_altura - 20),
+                    fonte,
+                    fonte_pequena,
+                    (250, 250, 250),
+                    0,
+                    lineType=cv2.LINE_AA)
+
+        cv2.imshow('object detection', frame)
+        if cv2.waitKey(25) & 0xFF == ord('q'):
+            cv2.destroyAllWindows()
+            break
 
 
 def test_base_validation(faces, category):
