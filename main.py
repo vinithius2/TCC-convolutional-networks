@@ -34,7 +34,6 @@ def main(argv):
             else:
                 detect_face_in_video(arg)
         elif opt in ("-r", "--real"):
-            print('# REAL')
             detect_face_in_realtime()
         elif opt in ("-h", "--help"):
             help()
@@ -218,9 +217,12 @@ def detect_face_in_realtime():
         :return:
     """
     import time
-    import matlab.engine
+    import csv
+    import datetime
     from tensorflow.keras.preprocessing.image import img_to_array
     from tensorflow.keras.models import load_model
+
+    to_list = [['faces', 'categoria', 'probabilidade', 'data', 'hora']]
 
     arquivo_modelo = 'processing/model_01_human_category.h5'
     model = load_model(arquivo_modelo)
@@ -243,6 +245,9 @@ def detect_face_in_realtime():
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
+    if not os.path.exists('material/csv_data'):
+        os.makedirs('material/csv_data')
+        print(f'Create directory: material/csv_data')
 
     while cv2.waitKey(1) < 0:
         conectado, frame = cap.read()
@@ -264,16 +269,16 @@ def detect_face_in_realtime():
                 roi = img_to_array(roi)
                 roi = np.expand_dims(roi, axis=0)
                 result = model.predict(roi)[0]
-                print(result)
                 if result is not None:
-                    # image_01 = cv2.imread('material/01_realtime.png')
-                    # if image_01:
-                    #     image_02 = cv2.imread(frame)
-                    #     I = np.single(rgb2gray(I))
-                    #     J = single(rgb2gray(J))
-                    # cv2.imwrite('material/01_realtime.png', frame)
                     resultado = np.argmax(result)
-                    cv2.putText(frame, category[resultado], (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
+                    prob = result[resultado] * 100
+                    text = "{}: {:.2f}%".format(category[resultado], prob)
+                    hora = datetime.datetime.now().strftime("%X") # Hora:Minuto:Segundo
+                    data = datetime.datetime.now().strftime("%d/%m/%Y")
+                    aux = [len(faces), category[resultado], "{:.2f}%".format(prob), data, hora]
+                    to_list.append(aux)
+
+                    cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
 
         cv2.putText(frame,
@@ -287,7 +292,12 @@ def detect_face_in_realtime():
 
         cv2.imshow('object detection', frame)
         if cv2.waitKey(25) & 0xFF == ord('q'):
+            print('Finalizado.')
             cv2.destroyAllWindows()
+            title = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+            with open(f'material/csv_data/{title}.csv', 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerows(to_list)
             break
 
 
