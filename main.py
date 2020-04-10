@@ -219,6 +219,8 @@ def detect_face_in_realtime():
     import time
     import csv
     import datetime
+    import dlib
+    from skimage.metrics._structural_similarity import structural_similarity
     from tensorflow.keras.preprocessing.image import img_to_array
     from tensorflow.keras.models import load_model
 
@@ -245,9 +247,20 @@ def detect_face_in_realtime():
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
-    if not os.path.exists('material/csv_data'):
-        os.makedirs('material/csv_data')
-        print(f'Create directory: material/csv_data')
+    # Cria os diretorios necessários
+    title_dir = datetime.datetime.now().strftime("%d%m%Y")
+    prob_list = list()
+    image_per_second_dict = dict()
+    if not os.path.exists('material/faces_realtime_compare_data'):
+        os.makedirs('material/faces_realtime_compare_data')
+        print(f'Create directory: material/faces_realtime_compare_data')
+    if not os.path.exists(f'material/faces_realtime_compare_data/{title_dir}'):
+        os.makedirs(f'material/faces_realtime_compare_data/{title_dir}')
+        print(f'Create directory: material/faces_realtime_compare_data/{title_dir}')
+    count_dirs = len(os.listdir(f'material/faces_realtime_compare_data/{title_dir}')) + 1
+    if not os.path.exists(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}'):
+        os.makedirs(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}')
+        print(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}')
 
     while cv2.waitKey(1) < 0:
         conectado, frame = cap.read()
@@ -259,12 +272,15 @@ def detect_face_in_realtime():
         face_cascade = cv2.CascadeClassifier('material/haarcascade_frontalface_default.xml')
         cinza = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
-
+        title_img = datetime.datetime.now().strftime("%H%M%S")
+        if not title_img in image_per_second_dict:
+            image_per_second_dict[title_img] = list()
         if len(faces) > 0:
             for (x, y, w, h) in faces:
                 frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
                 roi = cinza[y:y + h, x:x + w]
                 roi = cv2.resize(roi, (48, 48))
+                roi_copy = roi.copy()
                 roi = roi.astype("float") / 255.0
                 roi = img_to_array(roi)
                 roi = np.expand_dims(roi, axis=0)
@@ -272,8 +288,32 @@ def detect_face_in_realtime():
                 if result is not None:
                     resultado = np.argmax(result)
                     prob = result[resultado] * 100
+                    prob_list.append(prob)
                     text = "{}: {:.2f}%".format(category[resultado], prob)
-                    hora = datetime.datetime.now().strftime("%X") # Hora:Minuto:Segundo
+                    title_img_file = "{}_{:.2f}_{}".format(title_img, prob, category[resultado])
+
+                    image_per_second_dict[title_img].append({
+                        'file': title_img_file,
+                        'category': category[resultado],
+                        'prob': round(prob, 2)
+                    })
+                    """
+                    Ex:
+                        {
+                            '165022': [
+                                {'file': '...', 'category': 'adult_male', 59.65},
+                                {'file': '...', 'category': 'adult_male', 26.55},
+                            ],
+                            '165023': [
+                                {'file': '...', 'category': 'adult_male', 89.55}
+                            ],
+                            ...
+                        }
+                    """
+
+                    cv2.imwrite(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}/{title_img_file}.jpg',
+                                roi_copy)
+                    hora = datetime.datetime.now().strftime("%X")  # Hora:Minuto:Segundo
                     data = datetime.datetime.now().strftime("%d/%m/%Y")
                     aux = [len(faces), category[resultado], "{:.2f}%".format(prob), data, hora]
                     to_list.append(aux)
@@ -292,8 +332,30 @@ def detect_face_in_realtime():
 
         cv2.imshow('object detection', frame)
         if cv2.waitKey(25) & 0xFF == ord('q'):
-            print('Finalizado.')
+            print('Finalizado Realtime e iniciando processamento da estatistica.')
             cv2.destroyAllWindows()
+            media_prob = np.mean(prob_list)
+            print('media_prob: ', media_prob)
+            print('image_per_second_dict 01: ', image_per_second_dict)
+            for key, data in image_per_second_dict.items():
+                new_items = list()
+                imageB = None
+                for image in data:
+                    if float(image['prob']) >= round(media_prob, 2):
+                        imageA = cv2.imread(
+                            f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}/{image["file"]}.jpg', 0)
+                        if type(imageB) == np.ndarray:
+                            # 70 pra cima structural_similarity
+                            # Comparar imagens da mesma categoria
+                            mean = round(structural_similarity(imageA, imageB) * 100, 2)
+                            print(image["file"], mean)
+                        imageB = imageA
+                image_per_second_dict[key] = new_items
+            print('image_per_second_dict 02: ', image_per_second_dict)
+
+            if not os.path.exists('material/csv_data'):
+                os.makedirs('material/csv_data')
+                print(f'Create directory: material/csv_data')
             title = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
             with open(f'material/csv_data/{title}.csv', 'w', newline='') as file:
                 writer = csv.writer(file)
