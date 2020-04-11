@@ -228,7 +228,6 @@ def detect_face_in_realtime():
 
     arquivo_modelo = 'processing/model_01_human_category.h5'
     model = load_model(arquivo_modelo)
-
     cap = cv2.VideoCapture(0)
 
     conectado, video = cap.read()
@@ -247,21 +246,25 @@ def detect_face_in_realtime():
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
-    # Cria os diretorios necessários
-    title_dir = datetime.datetime.now().strftime("%d%m%Y")
+    category_count = {
+        'young_male': 0,
+        'adult_male': 0,
+        'old_male': 0,
+        'young_female': 0,
+        'adult_female': 0,
+        'old_female': 0
+    }
     prob_list = list()
-    image_per_second_dict = dict()
     if not os.path.exists('material/faces_realtime_compare_data'):
         os.makedirs('material/faces_realtime_compare_data')
         print(f'Create directory: material/faces_realtime_compare_data')
-    if not os.path.exists(f'material/faces_realtime_compare_data/{title_dir}'):
-        os.makedirs(f'material/faces_realtime_compare_data/{title_dir}')
-        print(f'Create directory: material/faces_realtime_compare_data/{title_dir}')
-    count_dirs = len(os.listdir(f'material/faces_realtime_compare_data/{title_dir}')) + 1
-    if not os.path.exists(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}'):
-        os.makedirs(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}')
-        print(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}')
+    # else:
+    #     images = os.listdir('material/faces_realtime_compare_data/')
+    #     for image in images:
+    #         os.remove(f'material/faces_realtime_compare_data/{image}')
+    #         print('Imagens de válidação deletadas.')
 
+    countFacesFrame = 0
     while cv2.waitKey(1) < 0:
         conectado, frame = cap.read()
         if not conectado:
@@ -272,86 +275,125 @@ def detect_face_in_realtime():
         face_cascade = cv2.CascadeClassifier('material/haarcascade_frontalface_default.xml')
         cinza = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
-        title_img = datetime.datetime.now().strftime("%H%M%S")
-        if not title_img in image_per_second_dict:
-            image_per_second_dict[title_img] = list()
+
         if len(faces) > 0:
+            hour = datetime.datetime.now().strftime("%H:%M:%S")
+            date = datetime.datetime.now().strftime("%d/%m/%Y")
+            countFacesFlag = False
+            roi_list = list()
+            if countFacesFrame != len(faces):
+                countFacesFlag = True
             for (x, y, w, h) in faces:
                 frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
+                # Para comparação com o frame atual e as fotos salvas
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                roi_copy = rgb[y:y + h, x:x + w]
+                roi_copy = cv2.resize(roi_copy, (150, 150))
+                # Para detecção da faces
                 roi = cinza[y:y + h, x:x + w]
                 roi = cv2.resize(roi, (48, 48))
-                roi_copy = roi.copy()
                 roi = roi.astype("float") / 255.0
                 roi = img_to_array(roi)
                 roi = np.expand_dims(roi, axis=0)
                 result = model.predict(roi)[0]
                 if result is not None:
                     resultado = np.argmax(result)
-                    prob = result[resultado] * 100
+                    prob = round(result[resultado] * 100, 2)
                     prob_list.append(prob)
                     text = "{}: {:.2f}%".format(category[resultado], prob)
-                    title_img_file = "{}_{:.2f}_{}".format(title_img, prob, category[resultado])
+                    MEDIA_PROB = 55.00
+                    if len(roi_list) == 1:
+                        MEDIA_PROB = 0.0
+                    # Validação de imagens para o registro
+                    if countFacesFlag and prob >= MEDIA_PROB:
+                        images = os.listdir('material/faces_realtime_compare_data/')
+                        images_valid_list = list()
 
-                    image_per_second_dict[title_img].append({
-                        'file': title_img_file,
-                        'category': category[resultado],
-                        'prob': round(prob, 2)
-                    })
-                    """
-                    Ex:
-                        {
-                            '165022': [
-                                {'file': '...', 'category': 'adult_male', 59.65},
-                                {'file': '...', 'category': 'adult_male', 26.55},
-                            ],
-                            '165023': [
-                                {'file': '...', 'category': 'adult_male', 89.55}
-                            ],
-                            ...
-                        }
-                    """
+                        for image in images:
+                            if category[resultado] in image:
+                                images_valid_list.append(image)
 
-                    cv2.imwrite(f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}/{title_img_file}.jpg',
-                                roi_copy)
-                    hora = datetime.datetime.now().strftime("%X")  # Hora:Minuto:Segundo
-                    data = datetime.datetime.now().strftime("%d/%m/%Y")
-                    aux = [len(faces), category[resultado], "{:.2f}%".format(prob), data, hora]
-                    to_list.append(aux)
-
+                        if len(images_valid_list) != 0:
+                            mean_list = list()
+                            for image in images_valid_list:
+                                image_base = cv2.imread(
+                                    f'material/faces_realtime_compare_data/{image}')
+                                mean = round(structural_similarity(roi_copy, image_base, multichannel=True) * 100, 2)
+                                mean_list.append(mean)
+                                print('mean: ', mean, 'prob: ', prob)
+                            if max(mean_list) <= 30.00:
+                                print('\nAchou um rosto novo: ', category[resultado])
+                                print(
+                                    'faces: ', len(faces),
+                                    'categoria: ', category[resultado],
+                                    'probabilidade: ', prob,
+                                    'date: ', date,
+                                    'hour: ', hour
+                                )
+                                category_count[category[resultado]] = category_count[category[resultado]] + 1
+                                aux = [len(faces), category[resultado], prob, date, hour]
+                                to_list.append(aux)
+                                roi_list.append({'category': category[resultado], 'roi_copy': roi_copy})
+                        else:
+                            print('\nSem fotos da categoria ou um novo rosto')
+                            print(
+                                'faces: ', len(faces),
+                                'categoria: ', category[resultado],
+                                'probabilidade: ', prob,
+                                'date: ', date,
+                                'hour: ', hour
+                            )
+                            category_count[category[resultado]] = category_count[category[resultado]] + 1
+                            aux = [len(faces), category[resultado], prob, date, hour]
+                            to_list.append(aux)
+                            roi_list.append({'category': category[resultado], 'roi_copy': roi_copy})
+                    countFacesFrame = len(faces)
                     cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
+            if roi_list:
+                for roi in roi_list:
+                    hour = datetime.datetime.now().strftime("%H%M%S%s")
+                    cv2.imwrite(f'material/faces_realtime_compare_data/{roi["category"]}_{hour}.jpg',
+                                             roi["roi_copy"])
+        else:
+            countFacesFrame = len(faces)
 
-        cv2.putText(frame,
-                    " frame processado em {:.2f} segundos".format(time.time() - t),
-                    (20, video_altura - 20),
-                    fonte,
-                    fonte_pequena,
-                    (250, 250, 250),
-                    0,
+        text_frame_04 = "{} Faces now".format(len(faces))
+        text_frame_03 = "Total detect {} people".format(len(to_list) - 1)
+        text_frame_02 = "young_male: {} " \
+                        "adult_male: {} " \
+                        "old_male: {} " \
+                        "young_female: {} " \
+                        "adult_female: {} " \
+                        "old_female: {}".format(
+            category_count['young_male'],
+            category_count['adult_male'],
+            category_count['old_male'],
+            category_count['young_female'],
+            category_count['adult_female'],
+            category_count['old_female']
+        )
+        text_frame_01 = "Frame processado em {:.2f} segundos".format(time.time() - t)
+
+        cv2.putText(frame, text_frame_01, (20, video_altura - 20), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_02, (20, video_altura - 35), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_03, (20, video_altura - 50), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_04, (20, video_altura - 65), fonte, fonte_pequena, (250, 250, 250), 0,
                     lineType=cv2.LINE_AA)
 
         cv2.imshow('object detection', frame)
         if cv2.waitKey(25) & 0xFF == ord('q'):
             print('Finalizado Realtime e iniciando processamento da estatistica.')
             cv2.destroyAllWindows()
-            media_prob = np.mean(prob_list)
-            print('media_prob: ', media_prob)
-            print('image_per_second_dict 01: ', image_per_second_dict)
-            for key, data in image_per_second_dict.items():
-                new_items = list()
-                imageB = None
-                for image in data:
-                    if float(image['prob']) >= round(media_prob, 2):
-                        imageA = cv2.imread(
-                            f'material/faces_realtime_compare_data/{title_dir}/{count_dirs}/{image["file"]}.jpg', 0)
-                        if type(imageB) == np.ndarray:
-                            # 70 pra cima structural_similarity
-                            # Comparar imagens da mesma categoria
-                            mean = round(structural_similarity(imageA, imageB) * 100, 2)
-                            print(image["file"], mean)
-                        imageB = imageA
-                image_per_second_dict[key] = new_items
-            print('image_per_second_dict 02: ', image_per_second_dict)
+
+            # images = os.listdir('material/faces_realtime_compare_data/')
+            # for image in images:
+            #     os.remove(f'material/faces_realtime_compare_data/{image}')
+            #     print('Imagens de válidação deletadas.')
+            # print('Resultado: ', to_list)
 
             if not os.path.exists('material/csv_data'):
                 os.makedirs('material/csv_data')
@@ -718,3 +760,4 @@ def image_processing():
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
