@@ -13,7 +13,10 @@ def main(argv):
         :param argv: list()
     """
     try:
-        opts, args = getopt.getopt(argv, "i:v:dtrh", ["image=", "video=", "dataset", "training", "real", "help"])
+        argv_01 = argv[:2]
+        argv_02 = argv[2:]
+        opts, args = getopt.getopt(argv_01, "i:v:g:dtrsh", ["image=", "video=", "dataset", "training", "real",
+                                                          "graph=", "save", "help"])
     except getopt.GetoptError as e:
         print("Erro: ", e, "\n")
         help()
@@ -33,8 +36,18 @@ def main(argv):
                 print('Caminho desconhecido, tente novamente.')
             else:
                 detect_face_in_video(arg)
-        elif opt in ("-r", "--real"):
-            detect_face_in_realtime()
+        elif opt in ("-r", "--real") or opt in ("-s", "--save"):
+            if len(opts) > 1 and opts[1][0] in ("-s", "--save"):
+                detect_face_in_realtime(True)
+                break
+            else:
+                detect_face_in_realtime(False)
+                break
+        elif opt in ("-g", "--graph"):
+            if not os.path.exists(arg):
+                print('Caminho desconhecido, tente novamente.')
+            elif argv_02[0] in ['-t', '--type']:
+                get_generate_statistics(arg, argv_02[1])
         elif opt in ("-h", "--help"):
             help()
         else:
@@ -56,8 +69,13 @@ def help():
     print('main.py -i <path> --image <path>\n')
     print('# Inicia a dectação no vídeo passado pelo PATH')
     print('main.py -v <path> --video <path>\n')
-    print('# Inicia a dectação em tempo real pela webcam')
-    print('main.py -r <path> --real <path>\n')
+    print('# Inicia a dectação em tempo real pela webcam, o uso do "--save" é opcional caso seja chamado, salvando '
+          'assim o vídeo atual.')
+    print('main.py -r --real --save\n')
+    print('# Gerar gráficos estatisticos dos arquivos CSV que foram gerados e se encontram no diretorio '
+          'do projeto "material/csv_data/", Ex: main.py -s 01.csv -t pie\n'
+          'Tipos: pie, line, bar')
+    print('main.py -s <path> --statistics <path> -t <type> --type <type>\n')
 
 
 def create_dataset():
@@ -122,7 +140,10 @@ def detect_face_in_image(path):
         roi_gray = roi_gray.astype('float') / 255.0
         cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0)
         prediction = loaded_model.predict(cropped_img)[0]
-        cv2.putText(original, category[int(np.argmax(prediction))], (x, y - 10),
+        category_value = prediction[int(np.argmax(prediction))]
+        prob = round(category_value * 100, 2)
+        text = "{}: {:.2f}%".format(category[int(np.argmax(prediction))], prob)
+        cv2.putText(original, text, (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
     if not os.path.exists('material/test_images'):
@@ -174,7 +195,7 @@ def detect_face_in_video(path):
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
-
+    print('Executando...')
     while cv2.waitKey(1) < 0:
         conectado, frame = cap.read()
         if not conectado:
@@ -195,10 +216,11 @@ def detect_face_in_video(path):
                 roi = img_to_array(roi)
                 roi = np.expand_dims(roi, axis=0)
                 result = model.predict(roi)[0]
-                print(result)
                 if result is not None:
                     resultado = np.argmax(result)
-                    cv2.putText(frame, category[resultado], (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
+                    prob = round(result[resultado] * 100, 2)
+                    text = "{}: {:.2f}%".format(category[resultado], prob)
+                    cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
 
         cv2.putText(frame, " frame processado em {:.2f} segundos".format(time.time() - t), (20, video_altura - 20),
@@ -207,18 +229,18 @@ def detect_face_in_video(path):
 
         saida_video.write(frame)
 
-    print("Terminou")
+    print("Finalizou em {:.2f} segundos".format(time.time() - t))
     saida_video.release()
 
 
-def detect_face_in_realtime():
+def detect_face_in_realtime(save):
     """
         Detecção facial em tempo real pela webcam
-        :return:
     """
     import time
     import csv
     import datetime
+    import face_recognition
     from tensorflow.keras.preprocessing.image import img_to_array
     from tensorflow.keras.models import load_model
 
@@ -226,7 +248,6 @@ def detect_face_in_realtime():
 
     arquivo_modelo = 'processing/model_01_human_category.h5'
     model = load_model(arquivo_modelo)
-
     cap = cv2.VideoCapture(0)
 
     conectado, video = cap.read()
@@ -242,13 +263,31 @@ def detect_face_in_realtime():
         video_largura = video.shape[1]
         video_altura = video.shape[0]
 
+    title_video = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+    if save:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = 24
+        if not os.path.exists('material/test_videos'):
+            os.makedirs('material/test_videos')
+            print(f'Create directory: material/test_videos')
+        saida_video = cv2.VideoWriter(
+            f'material/test_videos/realtime_{title_video}.mp4', fourcc, fps, (video_largura, video_altura))
+
+
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
-    if not os.path.exists('material/csv_data'):
-        os.makedirs('material/csv_data')
-        print(f'Create directory: material/csv_data')
-
+    category_count = {
+        'young_male': 0,
+        'adult_male': 0,
+        'old_male': 0,
+        'young_female': 0,
+        'adult_female': 0,
+        'old_female': 0
+    }
+    MEDIA_PROB = 50.00
+    encoding_list = list()
+    countFacesFrame = 0
     while cv2.waitKey(1) < 0:
         conectado, frame = cap.read()
         if not conectado:
@@ -261,7 +300,14 @@ def detect_face_in_realtime():
         faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
 
         if len(faces) > 0:
+            hour = datetime.datetime.now().strftime("%H:%M:%S")
+            date = datetime.datetime.now().strftime("%d/%m/%Y")
+            countFacesFlag = False
+            facesError = False
+            if countFacesFrame != len(faces):
+                countFacesFlag = True
             for (x, y, w, h) in faces:
+                frame_copy = frame.copy()
                 frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
                 roi = cinza[y:y + h, x:x + w]
                 roi = cv2.resize(roi, (48, 48))
@@ -271,41 +317,287 @@ def detect_face_in_realtime():
                 result = model.predict(roi)[0]
                 if result is not None:
                     resultado = np.argmax(result)
-                    prob = result[resultado] * 100
+                    prob = round(result[resultado] * 100, 2)
                     text = "{}: {:.2f}%".format(category[resultado], prob)
-                    hora = datetime.datetime.now().strftime("%X") # Hora:Minuto:Segundo
-                    data = datetime.datetime.now().strftime("%d/%m/%Y")
-                    aux = [len(faces), category[resultado], "{:.2f}%".format(prob), data, hora]
-                    to_list.append(aux)
-
+                    if countFacesFlag:
+                        face_rgb = frame_copy[y:y + h, x:x + w, ::-1]
+                        try:
+                            current_encoding = face_recognition.face_encodings(face_rgb)[0]
+                        except IndexError:
+                            facesError = True
+                        if encoding_list:
+                            if not facesError:
+                                compare = False
+                                for old_encoding in encoding_list:
+                                    compare_enconding = face_recognition.compare_faces([current_encoding], old_encoding)[0]
+                                    if compare_enconding:
+                                        compare = True
+                                if not compare:
+                                    if prob >= MEDIA_PROB:
+                                        print('Cadastrou um novo rosto: ', category[resultado])
+                                        aux = [len(faces), category[resultado], prob, date, hour]
+                                        to_list.append(aux)
+                                        category_count[category[resultado]] = category_count[category[resultado]] + 1
+                                        encoding_list.append(current_encoding)
+                                    else:
+                                        print(f'Não cadastrado, mas a probabilidade é {prob} de ser um {category[resultado]}')
+                                        facesError = True
+                        elif prob >= MEDIA_PROB and not facesError:
+                            print('Cadastrou um novo rosto: ', category[resultado])
+                            aux = [len(faces), category[resultado], prob, date, hour]
+                            to_list.append(aux)
+                            category_count[category[resultado]] = category_count[category[resultado]] + 1
+                            encoding_list.append(current_encoding)
+                        else:
+                            facesError = True
+                    countFacesFrame = 0
+                    if not facesError:
+                        countFacesFrame = len(faces)
                     cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
+        else:
+            countFacesFrame = len(faces)
 
-        cv2.putText(frame,
-                    " frame processado em {:.2f} segundos".format(time.time() - t),
-                    (20, video_altura - 20),
-                    fonte,
-                    fonte_pequena,
-                    (250, 250, 250),
-                    0,
+        text_frame_04 = "{} faces now".format(len(faces))
+        text_frame_03 = "Total detect {} people".format(len(to_list) - 1)
+        text_frame_02 = "young_male: {} " \
+                        "adult_male: {} " \
+                        "old_male: {} " \
+                        "young_female: {} " \
+                        "adult_female: {} " \
+                        "old_female: {}".format(
+            category_count['young_male'],
+            category_count['adult_male'],
+            category_count['old_male'],
+            category_count['young_female'],
+            category_count['adult_female'],
+            category_count['old_female']
+        )
+        text_frame_01 = "Frame processado em {:.2f} segundos".format(time.time() - t)
+
+        cv2.putText(frame, text_frame_01, (20, video_altura - 20), fonte, fonte_pequena, (250, 250, 250), 0,
                     lineType=cv2.LINE_AA)
-
+        cv2.putText(frame, text_frame_02, (20, video_altura - 35), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_03, (20, video_altura - 50), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_04, (20, video_altura - 65), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        if save:
+            saida_video.write(frame)
         cv2.imshow('object detection', frame)
+
         if cv2.waitKey(25) & 0xFF == ord('q'):
-            print('Finalizado.')
+            print('Finalizando o "realtime" e iniciando processamento da estatistica.')
             cv2.destroyAllWindows()
             title = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
             with open(f'material/csv_data/{title}.csv', 'w', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerows(to_list)
+                print(f'Arquivo material/csv_data/{title}.csv gerado com sucesso\n'
+                      f'Execute os seguintes comandos para gerar os gráficos:\n'
+                      f'python main.py -g material/csv_data/{title}.csv -t bar\n'
+                      f'python main.py -g material/csv_data/{title}.csv -t line\n'
+                      f'python main.py -g material/csv_data/{title}.csv -t pie\n')
+            if save:
+                print(f'Vídeo salvo material/csv_data/{title_video}.csv com sucesso')
+                saida_video.release()
             break
+
+
+def get_generate_statistics(path=None, type=None):
+    """
+        Organiza a chamada de cada grafico
+    :param path: str()
+    :param type: str()
+    :return:
+    """
+    name_dir = path.split('/')[-1:][0].split('.')[0]
+    if not os.path.exists('material/csv_statistics'):
+        os.makedirs('material/csv_statistics')
+        print(f'Create directory: material/csv_statistics')
+    if not os.path.exists(f'material/csv_statistics/{name_dir}'):
+        os.makedirs(f'material/csv_statistics/{name_dir}')
+        print(f'Create directory: material/csv_statistics/{name_dir}')
+
+    if type == 'pie':
+        graph_pie_category(name_dir, path)
+    elif type == 'line':
+        graph_history_line(name_dir, path)
+    elif type == 'bar':
+        graph_history_bar(name_dir, path)
+    else:
+        help()
+
+
+def graph_history_line(name_dir, path):
+    """
+        Gerar o grafico de historico de linha por cada minuto.
+    :param name_dir: str():
+    :param path: str():
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    category_dict, labels = get_data_history(df)
+
+    fig, ax = plt.subplots()
+
+    aux_list = list()
+    for key, data in category_dict.items():
+        if max(data) > 0:
+            aux_list.extend(data)
+            ax.plot(data, label=key.replace('_', ' ').title())
+
+    x = np.arange(len(labels))  # the label locations
+    y = np.arange(max(aux_list) + 1)  # the label locations
+
+    ax.set_ylabel('Controle de acesso de pessoas')
+    ax.set_title('Historico por detecção de face humana (minuto)')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(range(min(aux_list), max(aux_list) + 1))
+
+    ax.legend()
+
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label1.set_visible(True)
+
+    fig.savefig(f'material/csv_statistics/{name_dir}/historico_line.png', bbox_inches='tight')
+    print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_line.png')
+
+
+def graph_history_bar(name_dir, path):
+    """
+        Gerar o grafico de historico de barra por cada minuto.
+    :param name_dir: str():
+    :param path: str():
+    """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    category_dict, labels = get_data_history(df)
+
+    category_dict_copy = category_dict.copy()
+    for key, value in category_dict.items():
+        if sum(value) > 0:
+            category_dict_copy[key.replace('_', ' ').title()] = category_dict_copy[key]
+        del category_dict_copy[key]
+
+    df = pd.DataFrame(category_dict_copy)
+
+    ax = df.plot.bar(rot=0, width=0.8)
+
+    for p in ax.patches[1:]:
+        h = p.get_height()
+        x = p.get_x() + p.get_width() / 2.
+        if h != 0:
+            ax.annotate("%g" % p.get_height(), xy=(x, h), xytext=(0, 4), rotation=90,
+                        textcoords="offset points", ha="center", va="bottom")
+
+    ax.set_xlim(-0.5, None)
+    ax.margins(y=0)
+    ax.legend(ncol=len(df.columns), loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.08),
+              borderaxespad=0, mode="expand")
+
+    ax.set_xticklabels(labels)
+    plt.savefig(f'material/csv_statistics/{name_dir}/historico_bar.png')
+    print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_bar.png')
+
+
+def graph_pie_category(name_dir, path):
+    """
+        Gerar o grafico de pizza por quantidade de categoria
+    :param name_dir: str():
+    :param path: str():
+    """
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    category_dict, labels = get_data_history(df)
+
+    fig, ax = plt.subplots(figsize=(6, 3), subplot_kw=dict(aspect="equal"))
+
+    data = list()
+    category = list()
+    for key, value in category_dict.items():
+        if sum(value) > 0:
+            data.append(sum(value))
+            category.append(key.replace('_', ' ').title())
+
+    def func(pct, data):
+        absolute = int(pct / 100. * np.sum(data))
+        return "{:.1f}%\n({:d})".format(pct, absolute)
+
+    wedges, texts, autotexts = ax.pie(data, autopct=lambda pct: func(pct, data),
+                                      textprops=dict(color="w"))
+
+    ax.legend(wedges, category,
+              title="Categorias",
+              loc="center left",
+              bbox_to_anchor=(1, 0, 0.5, 1))
+
+    plt.setp(autotexts, size=8, weight="bold")
+
+    ax.set_title("Categorias por arquivo CSV")
+
+    fig.tight_layout()
+    fig.savefig(f'material/csv_statistics/{name_dir}/pie.png')
+    print(f'Gerou o grafico: material/csv_statistics/{name_dir}/pie.png')
+
+
+def get_data_history(df):
+    """
+    Usado na geração de graficos para formatadr os dados inciais para o DataFrame
+    :param df: DataFrame:
+    :return: dict(), list()
+    """
+    category_dict = {
+        'young_male': [0] * len(df.hora.unique()),
+        'adult_male': [0] * len(df.hora.unique()),
+        'old_male': [0] * len(df.hora.unique()),
+        'young_female': [0] * len(df.hora.unique()),
+        'adult_female': [0] * len(df.hora.unique()),
+        'old_female': [0] * len(df.hora.unique())
+    }
+    labels = list()
+    for name, group in df.groupby('hora'):
+        labels.append(name)
+        for categoria in group.categoria:
+            idx = len(labels) - 1
+            category_dict[categoria][idx] = category_dict[categoria][idx] + 1
+    return category_dict, labels
+
+
+def autolabel(rects, ax):
+    """
+        Attach a text label above each bar in *rects*, displaying its height.
+    """
+    for rect in rects:
+        height = rect.get_height()
+        ax.annotate('{}'.format(height),
+                    xy=(rect.get_x() + rect.get_width() / 2, height),
+                    xytext=(0, 3),  # 3 points vertical offset
+                    textcoords="offset points",
+                    ha='center', va='bottom')
 
 
 def test_base_validation(faces, category):
     """
         Base de treinamento, teste e validação
-        :param faces:
-        :param category:
+        :param faces: int()
+        :param category: str()
         :return:
     """
     from sklearn.model_selection import train_test_split
@@ -326,7 +618,7 @@ def test_base_validation(faces, category):
 def convert_images_for_tensorflow():
     """
         Converter as imagens cinzas no formato que o TensorFlow reconheça.
-        :return:
+        :return: float, str()
     """
     import numpy as np
     import pandas as pd
@@ -357,7 +649,7 @@ def convert_images_for_tensorflow():
 def create_neural_network():
     """
         Criação das Redes Neurais
-        :return:
+        :return: Sequential
     """
     from tensorflow.keras.models import Sequential
     from tensorflow.keras.layers import Dense, Dropout, Flatten
@@ -416,8 +708,8 @@ def create_neural_network():
 def model_compile(model):
     """
         Copilando modelo
-        :param model:
-        :return:
+        :param model: Sequential
+        :return: ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
     """
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
@@ -437,8 +729,7 @@ def model_compile(model):
 def save_json(model):
     """
         Salvando a arquitetura do modelo em um arquivo JSON
-        :param model:
-        :return:
+        :param model: Sequential
     """
     arquivo_modelo_json = 'model_01_human_category.json'
     model_json = model.to_json()
@@ -477,7 +768,6 @@ def create_graph_accuracy(history):
     """
         Gerando os gráficos
         :param history:
-        :return:
     """
 
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
@@ -504,7 +794,6 @@ def create_graph_accuracy(history):
 def data_to_generate_the_confusion_matrix():
     """
         Gerando os dados para a geração da matriz de confusão
-        :return:
     """
     from tensorflow.keras.models import model_from_json
 
@@ -542,7 +831,7 @@ def checking_model_accuracy(model, X_test, y_test):
         :param model:
         :param X_test:
         :param y_test:
-        :return:
+        :return: scores
     """
     batch_size = 64
     scores = model.evaluate(np.array(X_test), np.array(y_test), batch_size=batch_size)
@@ -586,7 +875,6 @@ def generate_the_confusion_matrix():
 def extrat_zip():
     """
         Extração das imagens base
-        :return:
     """
     import zipfile
 
@@ -599,7 +887,6 @@ def image_processing():
     """
         Pega-se todas as imagens comuns com RGB e alta resolução e transforma em imagens de tonalização cinza por
         48 pixels de altura e largura.
-        :return:
     """
     import csv
 
@@ -656,3 +943,4 @@ def image_processing():
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
