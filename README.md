@@ -24,6 +24,10 @@ Após finalizado a execução, é salvo em um arquivo CSV as colunas **faces**, 
 É possível gerar gráficos os arquivos CSV, Ex:
 *(Valores fictícios)*
 
+![Bar](https://user-images.githubusercontent.com/7644485/79261410-2920c980-7e66-11ea-8089-ef5b709f7132.png)
+![Line](https://user-images.githubusercontent.com/7644485/79261431-2f16aa80-7e66-11ea-8cfc-6a707c7f16f8.png)
+![Pie](https://user-images.githubusercontent.com/7644485/79261440-3473f500-7e66-11ea-8e9b-166fe47126d0.png)
+
     3. COMANDOS
 
  - Descompacta as imagens e cria o *dataset* para rede neural.
