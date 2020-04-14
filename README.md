@@ -11,17 +11,20 @@ Os estabelecimentos da UPA que trabalham com atendimento médico 24 horas por di
 
 Este projeto foi elaborado pensando em resolver tais problemas contextualizados acima, ele é capas de verificar em tempo real pela WebCam cada rosto e válidar categoricamente se é um **homem adulto** *(431)*, **homem jovem** *(171)*, **homem velho** *(204)*, **mulher adulta** *(452)*, **mulher jovem** *(181)* e **mulher velha** *(185)*, o projeto utilizou um **dataset** com **1624** imagens com canal cinza de **48 x 48 px** para o treinamento da inteligência artificial. 
 
+![gray](https://user-images.githubusercontent.com/7644485/79281334-e6bcb400-7e88-11ea-87c1-21d8d036f008.png)
+
 Para que ocorra o registro é necessário ter um rosto humano com mais de 50% de probabilidade de ser alguma categoria citada acima, quando cadastrado é salvo em memoria o **padrão característico facial* até o fim da execução, pois a cada face é validada para saber se já foi cadastrada na execução, caso já tenha o registro do padrão característico facial, não salva novamente a mesma pessoa, se não, salva respeitando a probabilidade de ser acima de 50% da caraterística encontrada.
+
+![detect](https://user-images.githubusercontent.com/7644485/79281264-c1c84100-7e88-11ea-8289-bf0bd41d92b6.png)
 
 Após finalizado a execução, é salvo em um arquivo CSV as colunas **faces**, **categoria**, **probabilidade**, **data**, **hora**, ex: 
 
 | faces | categoria | probabilidade | data | hora |
-
+--- | --- | --- | --- | ---
 | 1 | adult_male | 99.43 | 12/04/2020 | 16:51:38 |
-
 | 2 | adult_male | 84.29 | 12/04/2020 | 16:53:13 |
 
-É possível gerar gráficos os arquivos CSV, Ex:
+É possível gerar gráficos dos arquivos CSV processados, Ex:
 *(Valores fictícios)*
 
 ![Bar](https://user-images.githubusercontent.com/7644485/79261410-2920c980-7e66-11ea-8089-ef5b709f7132.png)
