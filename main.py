@@ -13,7 +13,10 @@ def main(argv):
         :param argv: list()
     """
     try:
-        opts, args = getopt.getopt(argv, "i:v:dtrh", ["image=", "video=", "dataset", "training", "real", "help"])
+        argv_01 = argv[:2]
+        argv_02 = argv[2:]
+        opts, args = getopt.getopt(argv_01, "i:v:s:dtrh", ["image=", "video=", "dataset", "training", "real",
+                                                          "statistics=", "help"])
     except getopt.GetoptError as e:
         print("Erro: ", e, "\n")
         help()
@@ -35,6 +38,11 @@ def main(argv):
                 detect_face_in_video(arg)
         elif opt in ("-r", "--real"):
             detect_face_in_realtime()
+        elif opt in ("-s", "--statistics"):
+            if not os.path.exists(arg):
+                print('Caminho desconhecido, tente novamente.')
+            elif argv_02[0] in ['-t', '--type']:
+                get_generate_statistics(arg, argv_02[1])
         elif opt in ("-h", "--help"):
             help()
         else:
@@ -57,7 +65,11 @@ def help():
     print('# Inicia a dectação no vídeo passado pelo PATH')
     print('main.py -v <path> --video <path>\n')
     print('# Inicia a dectação em tempo real pela webcam')
-    print('main.py -r <path> --real <path>\n')
+    print('main.py -r --real\n')
+    print('# Gerar gráficos estatisticos dos arquivos CSV que foram gerados e se encontram no diretorio '
+          'do projeto "material/csv_data/", Ex: main.py -s 01.csv -t pie\n'
+          'Tipos: pie, line, bar')
+    print('main.py -s <path> --statistics <path> -t <type> --type <type>\n')
 
 
 def create_dataset():
@@ -241,6 +253,14 @@ def detect_face_in_realtime():
         video_largura = video.shape[1]
         video_altura = video.shape[0]
 
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fps = 24
+    if not os.path.exists('material/test_videos'):
+        os.makedirs('material/test_videos')
+        print(f'Create directory: material/test_videos')
+    saida_video = cv2.VideoWriter(f'material/test_videos/teste_realtime.mp4', fourcc, fps, (video_largura, video_altura))
+
+
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
@@ -320,7 +340,6 @@ def detect_face_in_realtime():
                         countFacesFrame = len(faces)
                     cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
-
         else:
             countFacesFrame = len(faces)
 
@@ -349,7 +368,7 @@ def detect_face_in_realtime():
                     lineType=cv2.LINE_AA)
         cv2.putText(frame, text_frame_04, (20, video_altura - 65), fonte, fonte_pequena, (250, 250, 250), 0,
                     lineType=cv2.LINE_AA)
-
+        saida_video.write(frame)
         cv2.imshow('object detection', frame)
         if cv2.waitKey(25) & 0xFF == ord('q'):
             # TODO: Gerar gráficos estatisticos usando Pandas, Jupyter ou matplotlib
@@ -359,7 +378,169 @@ def detect_face_in_realtime():
             with open(f'material/csv_data/{title}.csv', 'w', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerows(to_list)
+            print("Salvou vídeo modelo")
+            saida_video.release()
             break
+
+
+def get_generate_statistics(path, type):
+    name_dir = path.split('/')[-1:][0].split('.')[0]
+    if not os.path.exists('material/csv_statistics'):
+        os.makedirs('material/csv_statistics')
+        print(f'Create directory: material/csv_statistics')
+    if not os.path.exists(f'material/csv_statistics/{name_dir}'):
+        os.makedirs(f'material/csv_statistics/{name_dir}')
+        print(f'Create directory: material/csv_statistics/{name_dir}')
+
+    if type == 'pie':
+        graph_pie_category(name_dir, path)
+    elif type == 'line':
+        graph_history_line(name_dir, path)
+    elif type == 'bar':
+        graph_history_bar(name_dir, path)
+    else:
+        help()
+
+
+def graph_history_line(name_dir, path):
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    category_dict, labels = get_data_history(df)
+
+    fig, ax = plt.subplots()
+
+    aux_list = list()
+    for key, data in category_dict.items():
+        if max(data) > 0:
+            aux_list.extend(data)
+            ax.plot(data, label=key.replace('_', ' ').title())
+
+    x = np.arange(len(labels))  # the label locations
+    y = np.arange(max(aux_list) + 1)  # the label locations
+
+    ax.set_ylabel('Controle de acesso de pessoas')
+    ax.set_title('Historico por detecção de face humana (minuto)')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(range(min(aux_list), max(aux_list) + 1))
+
+    ax.legend()
+
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label1.set_visible(True)
+
+    fig.savefig(f'material/csv_statistics/{name_dir}/historico_line.png', bbox_inches='tight')
+
+
+def graph_history_bar(name_dir, path):
+    import pandas as pd
+
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    category_dict, labels = get_data_history(df)
+
+    x = np.arange(len(labels))  # the label locations
+    width = 0.35  # the width of the bars
+
+    fig, ax = plt.subplots()
+
+    young_male = ax.bar(x - width / 2, category_dict['young_male'], width, label='Young Male')
+    adult_male = ax.bar(x + width / 2, category_dict['adult_male'], width, label='Adult Male')
+    old_male = ax.bar(x - width / 2, category_dict['old_male'], width, label='Old Male')
+    young_female = ax.bar(x + width / 2, category_dict['young_female'], width, label='Young Female')
+    adult_female = ax.bar(x - width / 2, category_dict['adult_female'], width, label='Adult Female')
+    old_female = ax.bar(x + width / 2, category_dict['old_female'], width, label='Old Female')
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel('Controle de acesso de pessoas')
+    ax.set_title('Historico por detecção de face humana (minuto)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+
+    autolabel(young_male, ax)
+    autolabel(adult_male, ax)
+    autolabel(old_male, ax)
+    autolabel(young_female, ax)
+    autolabel(adult_female, ax)
+    autolabel(old_female, ax)
+
+    fig.tight_layout()
+    fig.savefig(f'material/csv_statistics/{name_dir}/historico_bar.png')
+
+
+def graph_pie_category(name_dir, path):
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    category_dict, labels = get_data_history(df)
+
+    fig, ax = plt.subplots(figsize=(6, 3), subplot_kw=dict(aspect="equal"))
+
+    data = list()
+    category = list()
+    for key, value in category_dict.items():
+        if sum(value) > 0:
+            data.append(sum(value))
+            category.append(key.replace('_', ' ').title())
+
+    def func(pct, data):
+        absolute = int(pct / 100. * np.sum(data))
+        return "{:.1f}%\n({:d})".format(pct, absolute)
+
+    wedges, texts, autotexts = ax.pie(data, autopct=lambda pct: func(pct, data),
+                                      textprops=dict(color="w"))
+
+    ax.legend(wedges, category,
+              title="Categorias",
+              loc="center left",
+              bbox_to_anchor=(1, 0, 0.5, 1))
+
+    plt.setp(autotexts, size=8, weight="bold")
+
+    ax.set_title("Categorias por arquivo CSV")
+
+    fig.tight_layout()
+    fig.savefig(f'material/csv_statistics/{name_dir}/pie.png')
+
+
+def get_data_history(df):
+    category_dict = {
+        'young_male': [0] * len(df.hora.unique()),
+        'adult_male': [0] * len(df.hora.unique()),
+        'old_male': [0] * len(df.hora.unique()),
+        'young_female': [0] * len(df.hora.unique()),
+        'adult_female': [0] * len(df.hora.unique()),
+        'old_female': [0] * len(df.hora.unique())
+    }
+    labels = list()
+    for name, group in df.groupby('hora'):
+        labels.append(name)
+        for categoria in group.categoria:
+            idx = len(labels) - 1
+            category_dict[categoria][idx] = category_dict[categoria][idx] + 1
+    return category_dict, labels
+
+
+def autolabel(rects, ax):
+    """Attach a text label above each bar in *rects*, displaying its height."""
+    for rect in rects:
+        height = rect.get_height()
+        ax.annotate('{}'.format(height),
+                    xy=(rect.get_x() + rect.get_width() / 2, height),
+                    xytext=(0, 3),  # 3 points vertical offset
+                    textcoords="offset points",
+                    ha='center', va='bottom')
 
 
 def test_base_validation(faces, category):
