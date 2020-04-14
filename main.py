@@ -285,7 +285,7 @@ def detect_face_in_realtime(save):
         'adult_female': 0,
         'old_female': 0
     }
-    MEDIA_PROB = 55.00
+    MEDIA_PROB = 50.00
     encoding_list = list()
     countFacesFrame = 0
     while cv2.waitKey(1) < 0:
@@ -342,7 +342,7 @@ def detect_face_in_realtime(save):
                                     else:
                                         print(f'Não cadastrado, mas a probabilidade é {prob} de ser um {category[resultado]}')
                                         facesError = True
-                        elif prob >= MEDIA_PROB:
+                        elif prob >= MEDIA_PROB and not facesError:
                             print('Cadastrou um novo rosto: ', category[resultado])
                             aux = [len(faces), category[resultado], prob, date, hour]
                             to_list.append(aux)
