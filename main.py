@@ -59,7 +59,6 @@ def main(argv):
 def help():
     """
         Dicas de comandos para o terminal
-        :return:
     """
     print('\n# Descompacta as imagens e cria o dataset para rede neural.')
     print('main.py -d --dataset\n')
@@ -76,29 +75,6 @@ def help():
           'do projeto "material/csv_data/", Ex: main.py -s 01.csv -t pie\n'
           'Tipos: pie, line, bar')
     print('main.py -s <path> --statistics <path> -t <type> --type <type>\n')
-
-
-def create_dataset():
-    """
-        Descompactar imagens e criar dataset para rede neural.
-    """
-    extrat_zip()
-    image_processing()
-
-
-def training():
-    """
-        Treinar e testar a rede neural, gerar gráficos para o entendimento do treinamento.
-    """
-    X_train, y_train, X_val, y_val, X_test, y_test = test_base_validation()
-    faces, category = convert_images_for_tensorflow()
-    model = create_neural_network()
-    lr_reducer, early_stopper, checkpointer = model_compile(model)
-    save_json(model)
-    history = model_training(model, X_train, y_train, X_val, y_val, lr_reducer, early_stopper, checkpointer)
-    create_graph_accuracy(history)
-    scores = checking_model_accuracy(model, X_test, y_test)
-    data_to_generate_the_confusion_matrix()
 
 
 def detect_face_in_image(path):
@@ -591,6 +567,29 @@ def autolabel(rects, ax):
                     xytext=(0, 3),  # 3 points vertical offset
                     textcoords="offset points",
                     ha='center', va='bottom')
+
+
+def create_dataset():
+    """
+        Descompactar imagens e criar dataset para rede neural.
+    """
+    extrat_zip()
+    image_processing()
+
+
+def training():
+    """
+        Treinar e testar a rede neural, gerar gráficos para o entendimento do treinamento.
+    """
+    X_train, y_train, X_val, y_val, X_test, y_test = test_base_validation()
+    faces, category = convert_images_for_tensorflow()
+    model = create_neural_network()
+    lr_reducer, early_stopper, checkpointer = model_compile(model)
+    save_json(model)
+    history = model_training(model, X_train, y_train, X_val, y_val, lr_reducer, early_stopper, checkpointer)
+    create_graph_accuracy(history)
+    scores = checking_model_accuracy(model, X_test, y_test)
+    data_to_generate_the_confusion_matrix()
 
 
 def test_base_validation(faces, category):
