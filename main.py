@@ -46,8 +46,8 @@ def main(argv):
         elif opt in ("-g", "--graph"):
             if not os.path.exists(arg):
                 print('Caminho desconhecido, tente novamente.')
-            elif argv_02[0] in ['-t', '--type']:
-                get_generate_statistics(arg, argv_02[1])
+            else:
+                get_generate_statistics(arg)
         elif opt in ("-h", "--help"):
             help()
         else:
@@ -284,7 +284,7 @@ def detect_face_in_realtime(save):
                 countFacesFlag = True
             for (x, y, w, h) in faces:
                 frame_copy = frame.copy()
-                frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
+                final_frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
                 roi = cinza[y:y + h, x:x + w]
                 roi = cv2.resize(roi, (48, 48))
                 roi = roi.astype("float") / 255.0
@@ -329,7 +329,7 @@ def detect_face_in_realtime(save):
                     countFacesFrame = 0
                     if not facesError:
                         countFacesFrame = len(faces)
-                    cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
+                    cv2.putText(final_frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
         else:
             countFacesFrame = len(faces)
@@ -367,6 +367,9 @@ def detect_face_in_realtime(save):
             print('Finalizando o "realtime" e iniciando processamento da estatistica.')
             cv2.destroyAllWindows()
             title = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+            if not os.path.exists('material/csv_data'):
+                os.makedirs('material/csv_data')
+                print(f'Create directory: material/csv_data')
             with open(f'material/csv_data/{title}.csv', 'w', newline='') as file:
                 writer = csv.writer(file)
                 writer.writerows(to_list)
@@ -381,7 +384,7 @@ def detect_face_in_realtime(save):
             break
 
 
-def get_generate_statistics(path=None, type=None):
+def get_generate_statistics(path=None):
     """
         Organiza a chamada de cada grafico
     :param path: str()
@@ -396,14 +399,9 @@ def get_generate_statistics(path=None, type=None):
         os.makedirs(f'material/csv_statistics/{name_dir}')
         print(f'Create directory: material/csv_statistics/{name_dir}')
 
-    if type == 'pie':
-        graph_pie_category(name_dir, path)
-    elif type == 'line':
-        graph_history_line(name_dir, path)
-    elif type == 'bar':
-        graph_history_bar(name_dir, path)
-    else:
-        help()
+    graph_pie_category(name_dir, path)
+    graph_history_line(name_dir, path)
+    graph_history_bar(name_dir, path)
 
 
 def graph_history_line(name_dir, path):
@@ -416,6 +414,7 @@ def graph_history_line(name_dir, path):
     import pandas as pd
     import matplotlib.pyplot as plt
 
+    plt.figure(1)
     df = pd.read_csv(path)
     df['hora'] = df['hora'].apply(lambda x: x[:-3])
     category_dict, labels = get_data_history(df)
@@ -458,6 +457,7 @@ def graph_history_bar(name_dir, path):
     import pandas as pd
     import matplotlib.pyplot as plt
 
+    plt.figure(2)
     df = pd.read_csv(path)
     df['hora'] = df['hora'].apply(lambda x: x[:-3])
     category_dict, labels = get_data_history(df)
@@ -469,22 +469,34 @@ def graph_history_bar(name_dir, path):
         del category_dict_copy[key]
 
     df = pd.DataFrame(category_dict_copy)
-
     ax = df.plot.bar(rot=0, width=0.8)
-
     for p in ax.patches[1:]:
         h = p.get_height()
         x = p.get_x() + p.get_width() / 2.
         if h != 0:
-            ax.annotate("%g" % p.get_height(), xy=(x, h), xytext=(0, 4), rotation=90,
-                        textcoords="offset points", ha="center", va="bottom")
+            ax.annotate(
+                "%g" % p.get_height(),
+                xy=(x,h),
+                xytext=(0,4),
+                rotation=90,
+                textcoords="offset points",
+                ha="center",
+                va="bottom"
+            )
 
     ax.set_xlim(-0.5, None)
     ax.margins(y=0)
-    ax.legend(ncol=len(df.columns), loc="lower left", bbox_to_anchor=(0, 1.02, 1, 0.08),
-              borderaxespad=0, mode="expand")
+    ax.legend(
+        ncol=len(df.columns),
+        loc="lower left",
+        bbox_to_anchor=(0, 1.02, 1, 0.08),
+        borderaxespad=0,
+        mode="expand"
+    )
 
     ax.set_xticklabels(labels)
+    index = np.arange(len(labels))
+    plt.xticks(index, labels, fontsize=5, rotation=30)
     plt.savefig(f'material/csv_statistics/{name_dir}/historico_bar.png')
     print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_bar.png')
 
@@ -499,10 +511,10 @@ def graph_pie_category(name_dir, path):
     import numpy as np
     import matplotlib.pyplot as plt
 
+    plt.figure(3)
     df = pd.read_csv(path)
     df['hora'] = df['hora'].apply(lambda x: x[:-3])
     category_dict, labels = get_data_history(df)
-
     fig, ax = plt.subplots(figsize=(6, 3), subplot_kw=dict(aspect="equal"))
 
     data = list()
