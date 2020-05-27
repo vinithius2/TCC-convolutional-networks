@@ -130,24 +130,20 @@ def detect_face_in_image(path):
 
 def detect_face_in_video(path):
     """
-        Detecção facial por vídeo
-        :return:
+        Detecção facial em tempo real pela webcam
     """
-    import numpy as np
     import time
+    import csv
+    from datetime import datetime, timedelta
+    import face_recognition
     from tensorflow.keras.preprocessing.image import img_to_array
     from tensorflow.keras.models import load_model
 
+    to_list = [['faces', 'categoria', 'probabilidade', 'data', 'hora']]
+
     arquivo_modelo = 'processing/model_01_human_category.h5'
     model = load_model(arquivo_modelo)
-
     cap = cv2.VideoCapture(path)
-
-    name_file = path.split('/')
-    name_file = name_file[-1:][0]
-    name_file = name_file.split('.')
-    name_file = name_file[0]
-
     conectado, video = cap.read()
 
     redimensionar = True
@@ -161,18 +157,38 @@ def detect_face_in_video(path):
         video_largura = video.shape[1]
         video_altura = video.shape[0]
 
+    title_video = datetime.now().strftime("%d%m%Y_%H%M%S")
+
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     fps = 24
+    count_fps = 0
     if not os.path.exists('material/test_videos'):
         os.makedirs('material/test_videos')
         print(f'Create directory: material/test_videos')
-    saida_video = cv2.VideoWriter(f'material/test_videos/{name_file}.mp4', fourcc, fps, (video_largura, video_altura))
+    saida_video = cv2.VideoWriter(
+        f'material/test_videos/realtime_{title_video}.mp4', fourcc, fps, (video_largura, video_altura))
+
 
     fonte_pequena, fonte_media = 0.4, 0.7
     fonte = cv2.FONT_HERSHEY_SIMPLEX
     category = ['young_male', 'adult_male', 'old_male', 'young_female', 'adult_female', 'old_female']
-    print('Executando...')
+    category_count = {
+        'young_male': 0,
+        'adult_male': 0,
+        'old_male': 0,
+        'young_female': 0,
+        'adult_female': 0,
+        'old_female': 0
+    }
+    MEDIA_PROB = 50.00
+    encoding_list = list()
+    countFacesFrame = 0
+    now = datetime.now()
     while cv2.waitKey(1) < 0:
+        count_fps = count_fps + 1
+        if count_fps == fps:
+            now = now + timedelta(seconds=1)
+            count_fps = 0
         conectado, frame = cap.read()
         if not conectado:
             break
@@ -184,8 +200,15 @@ def detect_face_in_video(path):
         faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
 
         if len(faces) > 0:
+            hour = now.strftime("%H:%M:%S")
+            date = datetime.now().strftime("%d/%m/%Y")
+            countFacesFlag = False
+            facesError = False
+            if countFacesFrame != len(faces):
+                countFacesFlag = True
             for (x, y, w, h) in faces:
-                frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
+                frame_copy = frame.copy()
+                final_frame = cv2.rectangle(frame, (x, y), (x + w, y + h + 10), (255, 50, 50), 2)
                 roi = cinza[y:y + h, x:x + w]
                 roi = cv2.resize(roi, (48, 48))
                 roi = roi.astype("float") / 255.0
@@ -196,17 +219,90 @@ def detect_face_in_video(path):
                     resultado = np.argmax(result)
                     prob = round(result[resultado] * 100, 2)
                     text = "{}: {:.2f}%".format(category[resultado], prob)
-                    cv2.putText(frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
+                    if countFacesFlag:
+                        face_rgb = frame_copy[y:y + h, x:x + w, ::-1]
+                        try:
+                            current_encoding = face_recognition.face_encodings(face_rgb)[0]
+                        except IndexError:
+                            facesError = True
+                        if encoding_list:
+                            if not facesError:
+                                compare = False
+                                for old_encoding in encoding_list:
+                                    compare_enconding = face_recognition.compare_faces([current_encoding], old_encoding)[0]
+                                    if compare_enconding:
+                                        compare = True
+                                if not compare:
+                                    if prob >= MEDIA_PROB:
+                                        print('Cadastrou um novo rosto: ', category[resultado])
+                                        aux = [len(faces), category[resultado], prob, date, hour]
+                                        to_list.append(aux)
+                                        category_count[category[resultado]] = category_count[category[resultado]] + 1
+                                        encoding_list.append(current_encoding)
+                                    else:
+                                        print(f'Não cadastrado, mas a probabilidade é {prob} de ser um {category[resultado]}')
+                                        facesError = True
+                        elif prob >= MEDIA_PROB and not facesError:
+                            print('Cadastrou um novo rosto: ', category[resultado])
+                            aux = [len(faces), category[resultado], prob, date, hour]
+                            to_list.append(aux)
+                            category_count[category[resultado]] = category_count[category[resultado]] + 1
+                            encoding_list.append(current_encoding)
+                        else:
+                            facesError = True
+                    countFacesFrame = 0
+                    if not facesError:
+                        countFacesFrame = len(faces)
+                    cv2.putText(final_frame, text, (x, y - 10), fonte, fonte_media, (255, 255, 255), 1,
                                 cv2.LINE_AA)
+        else:
+            countFacesFrame = len(faces)
 
-        cv2.putText(frame, " frame processado em {:.2f} segundos".format(time.time() - t), (20, video_altura - 20),
-                    fonte,
-                    fonte_pequena, (250, 250, 250), 0, lineType=cv2.LINE_AA)
+        text_frame_04 = "{} faces now".format(len(faces))
+        text_frame_03 = "Total detect {} people".format(len(to_list) - 1)
+        text_frame_02 = "young_male: {} " \
+                        "adult_male: {} " \
+                        "old_male: {} " \
+                        "young_female: {} " \
+                        "adult_female: {} " \
+                        "old_female: {}".format(
+            category_count['young_male'],
+            category_count['adult_male'],
+            category_count['old_male'],
+            category_count['young_female'],
+            category_count['adult_female'],
+            category_count['old_female']
+        )
+        text_frame_01 = "Frame processado em {:.2f} segundos".format(time.time() - t)
+
+        cv2.putText(frame, text_frame_01, (20, video_altura - 20), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_02, (20, video_altura - 35), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_03, (20, video_altura - 50), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
+        cv2.putText(frame, text_frame_04, (20, video_altura - 65), fonte, fonte_pequena, (250, 250, 250), 0,
+                    lineType=cv2.LINE_AA)
 
         saida_video.write(frame)
+        cv2.imshow('object detection', frame)
 
-    print("Finalizou em {:.2f} segundos".format(time.time() - t))
-    saida_video.release()
+    print('Finalizando o "realtime" e iniciando processamento da estatistica.')
+    cv2.destroyAllWindows()
+    title = datetime.now().strftime("%d%m%Y_%H%M%S")
+    if not os.path.exists('material/csv_data'):
+        os.makedirs('material/csv_data')
+        print(f'Create directory: material/csv_data')
+    with open(f'material/csv_data/{title}.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(to_list)
+        print(f'Arquivo material/csv_data/{title}.csv gerado com sucesso\n'
+              f'Execute os seguintes comandos para gerar os gráficos:\n'
+              f'python main.py -g material/csv_data/{title}.csv -t bar\n'
+              f'python main.py -g material/csv_data/{title}.csv -t line\n'
+              f'python main.py -g material/csv_data/{title}.csv -t pie\n')
+        print(f'Vídeo salvo material/test_videos/{title_video}.mp4 com sucesso')
+        saida_video.release()
 
 
 def detect_face_in_realtime(save):
@@ -247,7 +343,7 @@ def detect_face_in_realtime(save):
             os.makedirs('material/test_videos')
             print(f'Create directory: material/test_videos')
         saida_video = cv2.VideoWriter(
-            f'material/test_videos/realtime_{title_video}.mp4', fourcc, fps, (video_largura, video_altura))
+            f'material/test_videos/video_{title_video}.mp4', fourcc, fps, (video_largura, video_altura))
 
 
     fonte_pequena, fonte_media = 0.4, 0.7
@@ -379,7 +475,7 @@ def detect_face_in_realtime(save):
                       f'python main.py -g material/csv_data/{title}.csv -t line\n'
                       f'python main.py -g material/csv_data/{title}.csv -t pie\n')
             if save:
-                print(f'Vídeo salvo material/csv_data/{title_video}.csv com sucesso')
+                print(f'Vídeo salvo material/test_videos/{title_video}.csv com sucesso')
                 saida_video.release()
             break
 
