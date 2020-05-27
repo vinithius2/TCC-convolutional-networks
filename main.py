@@ -417,7 +417,7 @@ def graph_history_line(name_dir, path):
     plt.figure(1)
     df = pd.read_csv(path)
     df['hora'] = df['hora'].apply(lambda x: x[:-3])
-    category_dict, labels = get_data_history(df)
+    category_dict, labels, data_str = get_data_history(df)
 
     fig, ax = plt.subplots()
 
@@ -430,8 +430,8 @@ def graph_history_line(name_dir, path):
     x = np.arange(len(labels))  # the label locations
     y = np.arange(max(aux_list) + 1)  # the label locations
 
-    ax.set_ylabel('Controle de acesso de pessoas')
-    ax.set_title('Historico por detecção de face humana (minuto)')
+    ax.set_ylabel('Quantidade de pessoas')
+    ax.set_title(f"Categorias por hora/minuto ({data_str})")
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -440,11 +440,12 @@ def graph_history_line(name_dir, path):
     ax.set_yticklabels(range(min(aux_list), max(aux_list) + 1))
 
     ax.legend()
-
+    ax.set_title(f"Categorias por hora/minuto ({data_str})")
     for tick in ax.yaxis.get_major_ticks():
         tick.label1.set_visible(True)
-
-    fig.savefig(f'material/csv_statistics/{name_dir}/historico_line.png', bbox_inches='tight')
+    index = np.arange(len(labels))
+    plt.xticks(index, labels, fontsize=8, rotation=30)
+    fig.savefig(f'material/csv_statistics/{name_dir}/historico_line.png', dpi=300, bbox_inches='tight')
     print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_line.png')
 
 
@@ -460,11 +461,12 @@ def graph_history_bar(name_dir, path):
     plt.figure(2)
     df = pd.read_csv(path)
     df['hora'] = df['hora'].apply(lambda x: x[:-3])
-    category_dict, labels = get_data_history(df)
-
+    category_dict, labels, data_str = get_data_history(df)
     category_dict_copy = category_dict.copy()
+    aux_list = list()
     for key, value in category_dict.items():
         if sum(value) > 0:
+            aux_list.extend(value)
             category_dict_copy[key.replace('_', ' ').title()] = category_dict_copy[key]
         del category_dict_copy[key]
 
@@ -476,28 +478,35 @@ def graph_history_bar(name_dir, path):
         if h != 0:
             ax.annotate(
                 "%g" % p.get_height(),
-                xy=(x,h),
-                xytext=(0,4),
-                rotation=90,
+                xy=(x, h),
+                xytext=(0, 4),
+                rotation=30,
+                fontsize=6,
                 textcoords="offset points",
                 ha="center",
                 va="bottom"
             )
+    ax.set_ylabel('Quantidade de pessoas')
+    y = np.arange(max(aux_list) + 1)  # the label locations
+    ax.set_yticks(y)
+    ax.set_yticklabels(range(0, max(aux_list) + 1))
 
     ax.set_xlim(-0.5, None)
     ax.margins(y=0)
     ax.legend(
         ncol=len(df.columns),
         loc="lower left",
-        bbox_to_anchor=(0, 1.02, 1, 0.08),
+        bbox_to_anchor=(0, -0.15, 1, 0.08),
+        fontsize=6,
         borderaxespad=0,
         mode="expand"
     )
 
     ax.set_xticklabels(labels)
+    plt.title(f"Categorias por hora/minuto ({data_str})", y=1.05)
     index = np.arange(len(labels))
-    plt.xticks(index, labels, fontsize=5, rotation=30)
-    plt.savefig(f'material/csv_statistics/{name_dir}/historico_bar.png')
+    plt.xticks(index, labels, fontsize=8, rotation=30)
+    plt.savefig(f'material/csv_statistics/{name_dir}/historico_bar.png', dpi=300, bbox_inches='tight')
     print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_bar.png')
 
 
@@ -514,7 +523,7 @@ def graph_pie_category(name_dir, path):
     plt.figure(3)
     df = pd.read_csv(path)
     df['hora'] = df['hora'].apply(lambda x: x[:-3])
-    category_dict, labels = get_data_history(df)
+    category_dict, labels, data_str = get_data_history(df)
     fig, ax = plt.subplots(figsize=(6, 3), subplot_kw=dict(aspect="equal"))
 
     data = list()
@@ -538,10 +547,10 @@ def graph_pie_category(name_dir, path):
 
     plt.setp(autotexts, size=8, weight="bold")
 
-    ax.set_title("Categorias por arquivo CSV")
+    ax.set_title(f"Categorias ({data_str})")
 
     fig.tight_layout()
-    fig.savefig(f'material/csv_statistics/{name_dir}/pie.png')
+    fig.savefig(f'material/csv_statistics/{name_dir}/pie.png', dpi=300, bbox_inches='tight')
     print(f'Gerou o grafico: material/csv_statistics/{name_dir}/pie.png')
 
 
@@ -560,12 +569,15 @@ def get_data_history(df):
         'old_female': [0] * len(df.hora.unique())
     }
     labels = list()
+    data_str = str()
     for name, group in df.groupby('hora'):
         labels.append(name)
         for categoria in group.categoria:
             idx = len(labels) - 1
             category_dict[categoria][idx] = category_dict[categoria][idx] + 1
-    return category_dict, labels
+        for data in group.data:
+            data_str = data
+    return category_dict, labels, data_str
 
 
 def autolabel(rects, ax):
