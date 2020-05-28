@@ -21,15 +21,15 @@ Após finalizado a execução, é salvo em um arquivo CSV as colunas **faces**, 
 
 | faces | categoria | probabilidade | data | hora |
 --- | --- | --- | --- | ---
-| 1 | adult_male | 99.43 | 12/04/2020 | 16:51:38 |
-| 2 | adult_male | 84.29 | 12/04/2020 | 16:53:13 |
+| 4 | young_female | 56.06 | 27/05/2020 | 20:25:44 |
+| 4 | young_female | 55.14 | 27/05/2020 | 20:25:44 |
 
 É possível gerar gráficos dos arquivos CSV processados, Ex:
 *(Valores fictícios)*
 
-![Bar](https://user-images.githubusercontent.com/7644485/79261410-2920c980-7e66-11ea-8089-ef5b709f7132.png)
-![Line](https://user-images.githubusercontent.com/7644485/79261431-2f16aa80-7e66-11ea-8cfc-6a707c7f16f8.png)
-![Pie](https://user-images.githubusercontent.com/7644485/79261440-3473f500-7e66-11ea-8e9b-166fe47126d0.png)
+![Bar](https://user-images.githubusercontent.com/7644485/83085667-01c33c00-a063-11ea-8492-5ce4ab56448c.png)
+![Line](https://user-images.githubusercontent.com/7644485/83085685-0b4ca400-a063-11ea-9346-6626eefcdb12.png)
+![Pie](https://user-images.githubusercontent.com/7644485/83085710-130c4880-a063-11ea-8fad-34fba3dafcc5.png)
 
     3. COMANDOS
 
