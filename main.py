@@ -495,12 +495,22 @@ def get_generate_statistics(path=None):
         os.makedirs(f'material/csv_statistics/{name_dir}')
         print(f'Create directory: material/csv_statistics/{name_dir}')
 
-    graph_pie_category(name_dir, path)
-    graph_history_line(name_dir, path)
-    graph_history_bar(name_dir, path)
+    CATEGORY = {
+        'young_male': "Macho jovem",
+        'adult_male': "Macho adulto",
+        'old_male': "Macho velho",
+        'young_female': "Fêmea jovem",
+        'adult_female': "Fêmea adulta",
+        'old_female': "Fêmea velha"
+    }
+
+    graph_pie_category(name_dir, path, CATEGORY)
+    graph_history_line(name_dir, path, CATEGORY)
+    graph_history_bar(name_dir, path, CATEGORY)
+    graph_media_bar(name_dir, path, CATEGORY)
 
 
-def graph_history_line(name_dir, path):
+def graph_history_line(name_dir, path, CATEGORY):
     """
         Gerar o grafico de historico de linha por cada minuto.
     :param name_dir: str():
@@ -521,13 +531,13 @@ def graph_history_line(name_dir, path):
     for key, data in category_dict.items():
         if max(data) > 0:
             aux_list.extend(data)
-            ax.plot(data, label=key.replace('_', ' ').title())
+            ax.plot(data, label=CATEGORY[key])
 
     x = np.arange(len(labels))  # the label locations
     y = np.arange(max(aux_list) + 1)  # the label locations
 
     ax.set_ylabel('Quantidade de pessoas')
-    ax.set_title(f"Categorias por hora/minuto ({data_str})")
+    # ax.set_title(f"Categorias por hora/minuto ({data_str})")
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
@@ -536,7 +546,7 @@ def graph_history_line(name_dir, path):
     ax.set_yticklabels(range(min(aux_list), max(aux_list) + 1))
 
     ax.legend()
-    ax.set_title(f"Categorias por hora/minuto ({data_str})")
+    # ax.set_title(f"Categorias por hora/minuto ({data_str})")
     for tick in ax.yaxis.get_major_ticks():
         tick.label1.set_visible(True)
     index = np.arange(len(labels))
@@ -545,7 +555,7 @@ def graph_history_line(name_dir, path):
     print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_line.png')
 
 
-def graph_history_bar(name_dir, path):
+def graph_history_bar(name_dir, path, CATEGORY):
     """
         Gerar o grafico de historico de barra por cada minuto.
     :param name_dir: str():
@@ -563,7 +573,7 @@ def graph_history_bar(name_dir, path):
     for key, value in category_dict.items():
         if sum(value) > 0:
             aux_list.extend(value)
-            category_dict_copy[key.replace('_', ' ').title()] = category_dict_copy[key]
+            category_dict_copy[CATEGORY[key]] = category_dict_copy[key]
         del category_dict_copy[key]
 
     df = pd.DataFrame(category_dict_copy)
@@ -577,7 +587,7 @@ def graph_history_bar(name_dir, path):
                 xy=(x, h),
                 xytext=(0, 4),
                 rotation=30,
-                fontsize=6,
+                fontsize=8,
                 textcoords="offset points",
                 ha="center",
                 va="bottom"
@@ -599,14 +609,44 @@ def graph_history_bar(name_dir, path):
     )
 
     ax.set_xticklabels(labels)
-    plt.title(f"Categorias por hora/minuto ({data_str})", y=1.05)
+    # plt.title(f"Categorias por hora/minuto ({data_str})", y=1.05)
     index = np.arange(len(labels))
     plt.xticks(index, labels, fontsize=8, rotation=30)
     plt.savefig(f'material/csv_statistics/{name_dir}/historico_bar.png', dpi=300, bbox_inches='tight')
     print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_bar.png')
 
 
-def graph_pie_category(name_dir, path):
+def graph_media_bar(name_dir, path, CATEGORY):
+    """
+        Gerar o grafico de historico de barra por cada minuto.
+    :param name_dir: str():
+    :param path: str():
+    """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    plt.figure(2)
+    df = pd.read_csv(path)
+    df['hora'] = df['hora'].apply(lambda x: x[:-3])
+    values, labels, data_str = get_data_media(df)
+    for idx, label in enumerate(labels):
+        labels[idx] = CATEGORY[label]
+    index = np.arange(len(labels))
+    plt.figure(1)
+    fig, ax = plt.subplots()
+    ax.barh(index, values)
+    plt.yticks(index, labels, fontsize=8, rotation=30)
+    plt.xlabel('Média %', fontsize=6)
+    ax.set_yticklabels(labels)
+    ax.invert_yaxis()
+    for i, v in enumerate(values):
+        plt.text(v, i, " " + str(v), va='center')
+
+    plt.savefig(f'material/csv_statistics/{name_dir}/media_bar.png', dpi=300, bbox_inches='tight')
+    print(f'Gerou o grafico: material/csv_statistics/{name_dir}/historico_bar.png')
+
+
+def graph_pie_category(name_dir, path, CATEGORY):
     """
         Gerar o grafico de pizza por quantidade de categoria
     :param name_dir: str():
@@ -627,7 +667,7 @@ def graph_pie_category(name_dir, path):
     for key, value in category_dict.items():
         if sum(value) > 0:
             data.append(sum(value))
-            category.append(key.replace('_', ' ').title())
+            category.append(CATEGORY[key])
 
     def func(pct, data):
         absolute = int(pct / 100. * np.sum(data))
@@ -643,7 +683,7 @@ def graph_pie_category(name_dir, path):
 
     plt.setp(autotexts, size=8, weight="bold")
 
-    ax.set_title(f"Categorias ({data_str})")
+    # ax.set_title(f"Categorias ({data_str})")
 
     fig.tight_layout()
     fig.savefig(f'material/csv_statistics/{name_dir}/pie.png', dpi=300, bbox_inches='tight')
@@ -664,6 +704,7 @@ def get_data_history(df):
         'adult_female': [0] * len(df.hora.unique()),
         'old_female': [0] * len(df.hora.unique())
     }
+
     labels = list()
     data_str = str()
     for name, group in df.groupby('hora'):
@@ -674,6 +715,27 @@ def get_data_history(df):
         for data in group.data:
             data_str = data
     return category_dict, labels, data_str
+
+
+def get_data_media(df):
+    """
+    Usado na geração de graficos para formatadr os dados inciais para o DataFrame
+    :param df: DataFrame:
+    :return: dict(), list()
+    """
+    labels = list()
+    values = list()
+    data_str = str()
+    for name, group in df.groupby('categoria'):
+        labels.append(name)
+        probabilidade_list = list()
+        for probabilidade in group.probabilidade:
+            probabilidade_list.append(probabilidade)
+        media = round(sum(probabilidade_list) / len(probabilidade_list), 2)
+        values.append(media)
+        for data in group.data:
+            data_str = data
+    return values, labels, data_str
 
 
 def autolabel(rects, ax):
