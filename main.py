@@ -369,6 +369,7 @@ def detect_face_in_realtime(save):
             frame = cv2.resize(frame, (video_largura, video_altura))
         face_cascade = cv2.CascadeClassifier('material/haarcascade_frontalface_default.xml')
         cinza = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        cinza = adjust_gamma(cinza)
         faces = face_cascade.detectMultiScale(cinza, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
 
         if len(faces) > 0:
@@ -478,6 +479,13 @@ def detect_face_in_realtime(save):
                 print(f'Vídeo salvo material/test_videos/{title_video}.csv com sucesso')
                 saida_video.release()
             break
+
+
+def adjust_gamma(image, gamma=1.5):
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+        for i in np.arange(0, 256)]).astype("uint8")
+    return cv2.LUT(image, table)
 
 
 def get_generate_statistics(path=None):
