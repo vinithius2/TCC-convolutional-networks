@@ -1,6 +1,8 @@
 
 # tcc-redes-convolucionais
 
+Link do TCC: https://drive.google.com/file/d/1b8DBn_dpyp5Y5mFKk7Ucv8R65pr8JmiT/view?usp=sharing
+
     1. CONTEXTUALIZAÇÃO
 
 Com uma grande demanda e uma administração sem nenhuma ferramenta adequada de controle de fluxo, as UPAS trazem um atendimento inadequado, muitas horas de espera, alta demanda e poucos médicos, que por consequência, tratam toda a população com total descaso, mães com seus filhos que não conseguem um rápido atendimento com um pediatra, ou um idoso hipertenso que não consegue ser atendido com prioridade. 	
